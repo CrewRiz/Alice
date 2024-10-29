@@ -1,0 +1,23 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.35013.160
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "Alice", "Alice\Alice.pyproj", "{DFDCCE83-8C36-4547-9957-0C0D3D9EB63E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DFDCCE83-8C36-4547-9957-0C0D3D9EB63E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFDCCE83-8C36-4547-9957-0C0D3D9EB63E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B66DCF72-1735-4031-811C-006B4714192C}
+	EndGlobalSection
+EndGlobal
