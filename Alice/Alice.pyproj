@@ -22,6 +22,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Alice.py" />
+    <Compile Include="ComputerInteractionSystem.py" />
+    <Compile Include="Gene.py" />
+    <Compile Include="PersonalityGene.py" />
+    <Compile Include="QuantumTime.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
