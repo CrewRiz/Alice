@@ -1,46 +1,80 @@
 Overview
+
 Alice is a sophisticated AI-driven framework designed to autonomously manage and execute tasks through rule-based interactions, knowledge management, and web interactions. Leveraging powerful libraries and APIs such as OpenAI, Anthropic, Streamlit, Selenium, and FAISS, Alice is capable of learning, adapting, and executing complex tasks while maintaining a persistent state across sessions.
 
 Features
+
 Rule-Based System: Define and manage rules that dictate system actions based on specific conditions.
+
 Knowledge Management: Utilize FAISS for efficient similarity search and embedding-based memory retrieval.
+
 Computer Interaction: Automate mouse movements, clicks, typing, command execution, and web browsing using pyautogui and selenium.
+
 Persistent Storage: Maintain system state, rules, memories, and knowledge graphs across sessions.
+
 Pattern Detection and Rule Generation: Analyze data to detect patterns and generate new rules dynamically using AI agents.
+
 System Analysis: Continuously monitor and analyze system metrics to optimize performance.
+
 Novelty Seeking: Implement algorithms to seek new information and enhance the system’s knowledge base.
+
 User Interface: Interact with Alice through an intuitive Streamlit web interface.
+
+
 Architecture
 Alice is composed of several interconnected classes and modules, each responsible for specific functionalities:
 
 Rule: Defines the structure and behavior of system rules.
+
 KnowledgeNode: Represents nodes in the knowledge graph with associated rules.
+
 ComputerInteractionSystem: Handles automated interactions with the computer environment.
+
 RAGMemory: Manages memory using Retrieval-Augmented Generation with FAISS for embedding-based searches.
+
 SystemState: Maintains the current state and metrics of the system.
+
 PatternDetectionAgent: Detects patterns in data using AI models.
+
 RuleGenerationAgent: Generates new rules based on detected patterns.
+
 AnalysisAgent: Analyzes the system state to recommend actions.
+
 WebInteractionAgent: Manages web interactions and browsing.
+
 NoveltySeekingAlgorithm: Enhances the system’s knowledge by seeking novel information.
+
 PersistentStorage: Handles saving and loading of persistent data.
+
 EnhancedLearningSystem: Integrates all components to provide a cohesive learning and execution environment.
+
 Streamlit Interface: Provides a user-friendly web interface for interacting with Alice.
+
+
 Installation
 Prerequisites
 Python 3.8+: Ensure Python is installed on your system. Download from python.org.
 Chrome Browser: Required for Selenium WebDriver. Download from google.com/chrome.
+
+
 Clone the Repository
 git clone https://github.com/yourusername/alice-enhanced-learning-system.git
 cd alice-enhanced-learning-system
+
+
 Create a Virtual Environment
 It's recommended to use a virtual environment to manage dependencies.
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+
 Install Dependencies
 pip install -r requirements.txt
+
+
 Install WebDriver
 Download the Chrome WebDriver that matches your Chrome browser version from here and place it in your system's PATH or specify its location in the code.
+
 
 Configuration
 API Keys
@@ -48,6 +82,7 @@ Alice utilizes APIs from OpenAI and Anthropic. You need to obtain API keys and c
 
 OpenAI API Key: Sign up at OpenAI to get your API key.
 Anthropic API Key: Sign up at Anthropic to get your API key.
+
 Setting API Keys
 You can set the API keys as environment variables or directly in the code (not recommended for security reasons).
 
