@@ -1,105 +1,207 @@
-Alice: Adaptive Learning and Interaction System
-Alice is an advanced, adaptive learning system that uses multiple Large Language Models (LLMs) to analyze, interact, and learn from its environment. Unlike traditional rule-based systems, Alice integrates contextual learning, dynamic rule generation, and task-oriented web interaction to perform complex, multi-step operations and continuously improve.
-
 Overview
-Alice is designed to interact with websites, file systems, and other digital environments, making her an ideal assistant for tasks that require adaptability and learning over time. By using retrieval-augmented memory, rule-based action generation, and pattern detection, Alice learns from previous interactions and applies insights to similar tasks in the future.
 
-Alice’s structure is modular and consists of several agents, each specializing in a specific function:
+Alice is a sophisticated AI-driven framework designed to autonomously manage and execute tasks through rule-based interactions, knowledge management, and web interactions. Leveraging powerful libraries and APIs such as OpenAI, Anthropic, Streamlit, Selenium, and FAISS, Alice is capable of learning, adapting, and executing complex tasks while maintaining a persistent state across sessions.
 
-Web Interaction Agent: Handles web-based interactions, analyzing tasks, and creating an action plan for step-by-step execution.
-Pattern Detection Agent: Detects patterns across tasks to inform rule generation and improve future actions.
-Rule Generation Agent: Generates new rules based on observed patterns, allowing Alice to adapt her approach dynamically.
-Analysis Agent: Analyzes Alice’s state and suggests areas for improvement or optimization.
-Memory System (RAGMemory): Stores contextually relevant memories for retrieval, enabling Alice to recall past tasks and decisions.
 Features
-Task Analysis and Action Planning: Alice breaks down tasks into actionable steps, determining the required actions and verifying success.
-Dynamic Rule Generation: Through continuous learning, Alice generates rules based on detected patterns, allowing her to adapt her actions based on historical data.
-Memory-Augmented Retrieval: Alice leverages memory to recall contextually relevant information, improving her ability to handle recurring or similar tasks effectively.
-Safe and Configurable System Interactions: Alice includes safety checks, rate limiting, and configurable settings for secure interactions with the system and web.
-Adaptive Task Execution: Alice learns from each task, analyzing outcomes to refine future performance.
-Example Use Cases
-Automated Web Navigation: Navigate a series of web pages, fill out forms, and verify results, adapting based on success rates.
-Contextual Learning and Adaptation: Alice can perform repeated tasks with variation, adapting to similar contexts and automating processes in an intelligent way.
-File and System Automation: Perform secure file operations or command-line tasks based on learned rules and safety checks.
-Getting Started
-Prerequisites
-To run Alice, ensure you have the following installed:
 
-Python 3.8+
-Required packages:
-bash
-Copy code
-pip install anthropic openai streamlit numpy faiss-cpu selenium pyautogui
-ChromeDriver (for Selenium web interactions): Download here.
+Rule-Based System: Define and manage rules that dictate system actions based on specific conditions.
+
+Knowledge Management: Utilize FAISS for efficient similarity search and embedding-based memory retrieval.
+
+Computer Interaction: Automate mouse movements, clicks, typing, command execution, and web browsing using pyautogui and selenium.
+
+Persistent Storage: Maintain system state, rules, memories, and knowledge graphs across sessions.
+
+Pattern Detection and Rule Generation: Analyze data to detect patterns and generate new rules dynamically using AI agents.
+
+System Analysis: Continuously monitor and analyze system metrics to optimize performance.
+
+Novelty Seeking: Implement algorithms to seek new information and enhance the system’s knowledge base.
+
+User Interface: Interact with Alice through an intuitive Streamlit web interface.
+
+
+Architecture
+Alice is composed of several interconnected classes and modules, each responsible for specific functionalities:
+
+Rule: Defines the structure and behavior of system rules.
+
+KnowledgeNode: Represents nodes in the knowledge graph with associated rules.
+
+ComputerInteractionSystem: Handles automated interactions with the computer environment.
+
+RAGMemory: Manages memory using Retrieval-Augmented Generation with FAISS for embedding-based searches.
+
+SystemState: Maintains the current state and metrics of the system.
+
+PatternDetectionAgent: Detects patterns in data using AI models.
+
+RuleGenerationAgent: Generates new rules based on detected patterns.
+
+AnalysisAgent: Analyzes the system state to recommend actions.
+
+WebInteractionAgent: Manages web interactions and browsing.
+
+NoveltySeekingAlgorithm: Enhances the system’s knowledge by seeking novel information.
+
+PersistentStorage: Handles saving and loading of persistent data.
+
+EnhancedLearningSystem: Integrates all components to provide a cohesive learning and execution environment.
+
+Streamlit Interface: Provides a user-friendly web interface for interacting with Alice.
+
+
 Installation
-Clone this repository:
+Prerequisites
+Python 3.8+: Ensure Python is installed on your system. Download from python.org.
+Chrome Browser: Required for Selenium WebDriver. Download from google.com/chrome.
 
-bash
-Copy code
-git clone https://github.com/yourusername/alice.git
-cd alice
-Set up API Keys: Add your API keys for Anthropic and OpenAI in config.json or directly in the code.
 
-Run the Sample Task: Test Alice with the provided sample task to verify that setup and functionality are working as expected.
+Clone the Repository
+git clone https://github.com/yourusername/alice-enhanced-learning-system.git
+cd alice-enhanced-learning-system
 
-bash
-Copy code
-python test_web_interaction.py
-Basic Usage
-To start using Alice, create an instance of EnhancedLearningSystem and feed it tasks to process. Alice’s memory and rules will adapt based on task outcomes, enhancing her performance over time.
 
-python
-Copy code
-import asyncio
-from your_module_name import EnhancedLearningSystem
+Create a Virtual Environment
+It's recommended to use a virtual environment to manage dependencies.
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-async def main():
-    alice = EnhancedLearningSystem()
-    task = """
-    1. Go to example.com
-    2. Click the search button
-    3. Type 'test query'
-    4. Press enter
-    5. Verify results appeared
-    """
-    results = await alice.process_web_task(task)
-    print("Task Results:", results)
 
-if __name__ == "__main__":
-    asyncio.run(main())
-Directory Structure
-graphql
-Copy code
-alice/
-├── agents/
-│   ├── web_interaction_agent.py    # WebInteractionAgent for task analysis and action execution
-│   ├── pattern_detection_agent.py   # PatternDetectionAgent for detecting common patterns
-│   ├── rule_generation_agent.py     # RuleGenerationAgent for rule-based learning
-│   └── analysis_agent.py            # AnalysisAgent for system state analysis
-├── core/
-│   ├── enhanced_learning_system.py  # Main EnhancedLearningSystem integrating all components
-│   └── computer_interaction_system.py # System interaction with safety and control
-├── memory/
-│   └── rag_memory.py                # Memory system for contextual task recall
-├── README.md                        # Project README
-└── requirements.txt                 # Project dependencies
-Future Development
-Alice is an evolving system, and the following improvements and additions are planned:
+Install Dependencies
+pip install -r requirements.txt
 
-Enhanced Pattern and Rule Detection: Improve the sophistication of pattern recognition and rule generation for broader application.
-Error Handling and Retry Mechanisms: Add dynamic retries and error recovery to increase reliability in complex tasks.
-Support for Additional Interaction Types: Expand Alice’s interaction abilities to handle more complex applications and workflows.
-Improved Memory Management: Explore advanced memory management for more efficient retrieval and summarization of past interactions.
-Task-Specific Configuration: Allow custom settings per task, providing more flexibility and control for specific workflows.
+
+Install WebDriver
+Download the Chrome WebDriver that matches your Chrome browser version from here and place it in your system's PATH or specify its location in the code.
+
+
+Configuration
+API Keys
+Alice utilizes APIs from OpenAI and Anthropic. You need to obtain API keys and configure them in the system.
+
+OpenAI API Key: Sign up at OpenAI to get your API key.
+Anthropic API Key: Sign up at Anthropic to get your API key.
+
+Setting API Keys
+You can set the API keys as environment variables or directly in the code (not recommended for security reasons).
+
+Using Environment Variables:
+
+
+export OPENAI_API_KEY='your-openai-api-key'
+export ANTHROPIC_API_KEY='your-anthropic-api-key'
+Alternatively, set them directly in the code:
+
+
+self.claude_client = anthropic.Client(api_key="your_anthropic_key")
+self.openai_client = openai
+openai.api_key = "your_openai_key"
+Configuration File
+Alice uses a default configuration for safety and operational limits. You can customize these settings by modifying the config parameter when initializing ComputerInteractionSystem.
+
+Usage
+Running the Application
+Start the Streamlit interface to interact with Alice.
+streamlit run alice.py
+
+Using the Interface
+Task Input: Enter a task description in the provided text area and click "Process Task" to initiate processing.
+System Metrics: View real-time metrics of Alice, including complexity, novelty, confidence, and resource usage.
+Results: After processing, Alice will display the updated system state and metrics.
+Example Workflow
+Input Task: Describe a task, such as "Automate the backup of important files."
+Process Task: Click "Process Task" to let Alice analyze, generate rules, and execute necessary actions.
+View Results: Monitor the system state and metrics to understand how the task was handled.
+Components
+Rule Class
+Defines the structure of a rule, including its text, associated action, usage metrics, embedding for similarity, and connections to other rules.
+
+KnowledgeNode Class
+Represents nodes in the knowledge graph, linking rules and tracking their strength and entanglements.
+
+ComputerInteractionSystem Class
+Handles automated interactions with the computer, including mouse movements, clicks, typing, command execution, and web browsing, while ensuring safety through predefined limits and restrictions.
+
+RAGMemory Class
+Manages a memory system using Retrieval-Augmented Generation (RAG) with FAISS for efficient similarity searches and memory retrieval based on embeddings.
+
+SystemState Class
+Maintains the current state of the system, including metrics, active rules, pending actions, and the knowledge graph.
+
+PatternDetectionAgent Class
+Analyzes incoming data to detect patterns such as recurring elements, structural similarities, temporal patterns, and causal relationships using AI models.
+
+RuleGenerationAgent Class
+Generates new rules based on detected patterns, facilitating Alice's ability to adapt and learn autonomously.
+
+AnalysisAgent Class
+Evaluates the current system state to identify key metrics, areas needing improvement, recommended actions, and resource requirements.
+
+WebInteractionAgent Class
+Manages web interactions and browsing activities, integrating with the ComputerInteractionSystem for automated tasks.
+
+NoveltySeekingAlgorithm Class
+Implements algorithms to seek novel information, assess incompleteness in tasks, and enhance the knowledge graph by generating and integrating new rules.
+
+PersistentStorage Class
+Handles the saving and loading of persistent data, including RAG memory, rules, system state, and the knowledge graph, ensuring data longevity across sessions.
+
+EnhancedLearningSystem Class
+Integrates all components, managing the overall workflow of processing tasks, applying rules, saving state, and interacting with various agents to maintain and enhance system capabilities.
+
+Streamlit Interface
+Provides a user-friendly web interface for interacting with Alice, allowing users to input tasks, view system metrics, and monitor results in real-time.
+
+Dependencies
+Alice relies on several Python libraries and external tools. Ensure all dependencies are installed as specified.
+
+Python Libraries
+anthropic: For interacting with Anthropic's AI models.
+openai: For interacting with OpenAI's APIs.
+streamlit: For creating the web interface.
+pyautogui: For automating mouse and keyboard interactions.
+subprocess: For executing system commands.
+os: For operating system interactions.
+datetime: For handling date and time.
+typing: For type annotations.
+numpy: For numerical operations.
+pickle: For serializing objects.
+faiss: For efficient similarity search and clustering of dense vectors.
+selenium: For automating web browser interactions.
+time: For time-related functions.
+logging: For logging system actions and errors.
+networkx: For creating and managing knowledge graphs.
+json: For handling JSON data.
+asyncio: For asynchronous operations.
+External Tools
+Chrome WebDriver: Required for Selenium to automate Chrome browser interactions.
+Logging
+Alice maintains detailed logs of all system actions and errors to help with monitoring and debugging.
+
+System Actions Log: Stored in system_actions.log.
+Learning System Log: Stored in learning_system.log.
+Ensure that these log files are monitored regularly to track the system's performance and identify any issues.
+
 Contributing
-We welcome contributions to make Alice a better system! Here’s how you can help:
+Contributions are welcome! If you'd like to contribute to Alice, please follow these steps:
 
-Fork the Repository: Clone your fork and create a new branch.
-Add New Features: Implement enhancements or fix bugs.
-Submit a Pull Request: Describe the feature/fix and provide examples if applicable.
+Fork the Repository: Click the "Fork" button at the top-right corner of the repository page.
+
+Clone Your Fork:
+git clone https://github.com/yourusername/alice-enhanced-learning-system.git
+cd alice-enhanced-learning-system
+Create a New Branch:
+git checkout -b feature/your-feature-name
+Make Your Changes: Implement your feature or bug fix.
+Commit Your Changes:
+git commit -m "Add feature: your feature description"
+Push to Your Fork:
+git push origin feature/your-feature-name
+Open a Pull Request: Navigate to the original repository and open a pull request from your fork.
+
+Please ensure your code follows the project's coding standards and includes appropriate tests.
+
 License
-This project is licensed under the MIT License. See the LICENSE file for more details.
-
-Contact
-Feel free to reach out if you have questions or feedback. We’re excited to see how Alice evolves with community input!
+This project is licensed under the MIT License.
 
