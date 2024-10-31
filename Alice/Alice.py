@@ -15,9 +15,56 @@ import numpy as np
 import re
 from datetime import datetime
 from typing import Dict, Any, List
+import inspect
+import ast
+import threading
+import copy
+import sys
 
 # Set up OpenAI API key
 openai.api_key = 'your_openai_api_key'  # Replace with your OpenAI API key
+
+# --- UtilityFunction Class ---
+class UtilityFunction:
+    def __init__(self):
+        self.history = []
+        self.desired_threshold = 0.8  # Example threshold
+    
+    def evaluate(self, system_state) -> float:
+        # Example utility calculation
+        task_success_rate = self.calculate_task_success_rate(system_state)
+        resource_efficiency = self.calculate_resource_efficiency(system_state)
+        learning_efficiency = self.calculate_learning_efficiency(system_state)
+        time_efficiency = self.calculate_time_efficiency(system_state)
+        utility = (
+            0.4 * task_success_rate +
+            0.3 * resource_efficiency +
+            0.2 * learning_efficiency +
+            0.1 * time_efficiency
+        )
+        self.history.append(utility)
+        return utility
+    
+    def calculate_task_success_rate(self, system_state):
+        # Implement your logic
+        completed_tasks = system_state.metrics.get('completed_tasks', 0)
+        total_tasks = system_state.metrics.get('total_tasks', 1)
+        return completed_tasks / total_tasks if total_tasks > 0 else 0
+    
+    def calculate_resource_efficiency(self, system_state):
+        # Implement your logic
+        cpu_usage = system_state.metrics.get('cpu_usage', 0.5)
+        memory_usage = system_state.metrics.get('memory_usage', 0.5)
+        return 1.0 - (cpu_usage + memory_usage) / 2
+    
+    def calculate_learning_efficiency(self, system_state):
+        # Implement your logic
+        new_rules = system_state.metrics.get('new_rules_generated', 0)
+        return min(new_rules / 10.0, 1.0)
+    
+    def calculate_time_efficiency(self, system_state):
+        avg_time = system_state.metrics.get('average_task_time', 1.0)
+        return 1.0 / avg_time  # Lower average time yields higher efficiency
 
 # --- Rule Class ---
 class Rule:
@@ -46,11 +93,15 @@ class Rule:
         self.strength *= time_factor
         
     def _get_embedding(self, text: str) -> np.array:
-        response = openai.Embedding.create(
-            model="text-embedding-ada-002",
-            input=text
-        )
-        return np.array(response['data'][0]['embedding'])
+        try:
+            response = openai.Embedding.create(
+                model="text-embedding-ada-002",
+                input=text
+            )
+            return np.array(response['data'][0]['embedding'])
+        except Exception as e:
+            logging.error(f"Embedding API call failed: {e}")
+            return np.zeros(1536)
         
     def __str__(self):
         return self.rule_text
@@ -218,11 +269,15 @@ class RAGMemory:
         return [self.memories[i] for i in I[0]]
         
     def _get_embedding(self, text: str) -> np.array:
-        response = openai.Embedding.create(
-            model="text-embedding-ada-002",
-            input=text
-        )
-        return np.array(response['data'][0]['embedding'])
+        try:
+            response = openai.Embedding.create(
+                model="text-embedding-ada-002",
+                input=text
+            )
+            return np.array(response['data'][0]['embedding'])
+        except Exception as e:
+            logging.error(f"Embedding API call failed: {e}")
+            return np.zeros(1536)
 
 # --- Persona Class ---
 class Persona:
@@ -251,7 +306,13 @@ class SystemState:
             'complexity': 0,
             'novelty': 0,
             'confidence': 1.0,
-            'resource_usage': {}
+            'resource_usage': {},
+            'completed_tasks': 0,
+            'total_tasks': 0,
+            'cpu_usage': 0.5,
+            'memory_usage': 0.5,
+            'new_rules_generated': 0,
+            'average_task_time': 1.0
         }
         self.active_rules = []
         self.pending_actions = []
@@ -259,6 +320,11 @@ class SystemState:
         self.current_task = None
         self.past_interactions = []
         self.emotions = {}
+        self.operational_state = {}
+        self.time_limits = {
+            'reasoning': 5.0,
+            'self_improvement': 10.0
+        }
 
     def update(self, new_data: Dict):
         self.metrics.update(new_data.get('metrics', {}))
@@ -283,12 +349,32 @@ class SystemState:
             return self.past_interactions[-2]['task']
         return None
 
+    def inspect_self(self):
+        local_vars = locals()
+        global_vars = globals()
+        current_module = inspect.getmodule(inspect.currentframe())
+        functions = inspect.getmembers(current_module, inspect.isfunction)
+        classes = inspect.getmembers(current_module, inspect.isclass)
+        self.operational_state = {
+            'local_variables': local_vars,
+            'global_variables': global_vars,
+            'functions': functions,
+            'classes': classes
+        }
+
+    def update_time_constraints(self):
+        # Adjust time limits based on metrics like system load or task urgency
+        if self.metrics['cpu_usage'] > 0.8:
+            self.time_limits['reasoning'] = max(1.0, self.time_limits['reasoning'] - 1.0)
+        else:
+            self.time_limits['reasoning'] = min(10.0, self.time_limits['reasoning'] + 1.0)
+
 # --- PatternDetectionAgent Class ---
 class PatternDetectionAgent:
     def __init__(self, client):
         self.client = client
         
-    async def detect_patterns(self, data: Dict) -> Dict:
+    async def detect_patterns(self, data: Dict, time_limit: float = 5.0) -> Dict:
         prompt = f"""Analyze the following data for patterns:
 1. Recurring elements
 2. Structural similarities
@@ -297,14 +383,21 @@ class PatternDetectionAgent:
 
 Data: {data}
 """
-        response = await self.client.completions.create(
-            model="claude-v1",
-            max_tokens=1000,
-            temperature=0.2,
-            prompt=prompt
-        )
-        return self._parse_pattern_response(response.completion)
-        
+        try:
+            response = await asyncio.wait_for(
+                self.client.completions.create(
+                    model="claude-v1",
+                    max_tokens=1000,
+                    temperature=0.2,
+                    prompt=prompt
+                ),
+                timeout=time_limit
+            )
+            return self._parse_pattern_response(response.completion)
+        except asyncio.TimeoutError:
+            logging.warning("Pattern detection timed out.")
+            return {}
+            
     def _parse_pattern_response(self, content: str) -> Dict:
         patterns = {}
         sections = re.split(r'\n(?=\d+\.)', content.strip())
@@ -321,7 +414,7 @@ class RuleGenerationAgent:
     def __init__(self, client):
         self.client = client
         
-    async def generate_rules(self, data: Dict) -> List[Rule]:
+    async def generate_rules(self, data: Dict, time_limit: float = 5.0) -> List[Rule]:
         prompt = f"""Generate formal rules based on these patterns:
 Data: {data}
 
@@ -330,14 +423,21 @@ Format:
    Action: [system should do this]
    Confidence: [0-1 score]
 """
-        response = await self.client.completions.create(
-            model="claude-v1",
-            max_tokens=1000,
-            temperature=0.3,
-            prompt=prompt
-        )
-        return self._parse_rules(response.completion)
-        
+        try:
+            response = await asyncio.wait_for(
+                self.client.completions.create(
+                    model="claude-v1",
+                    max_tokens=1000,
+                    temperature=0.3,
+                    prompt=prompt
+                ),
+                timeout=time_limit
+            )
+            return self._parse_rules(response.completion)
+        except asyncio.TimeoutError:
+            logging.warning("Rule generation timed out.")
+            return []
+            
     def _parse_rules(self, content: str) -> List[Rule]:
         rules = []
         rule_texts = re.split(r'\n(?=\d+\.)', content.strip())
@@ -366,7 +466,7 @@ class AnalysisAgent:
     def __init__(self, client):
         self.client = client
         
-    async def analyze_state(self, state: Dict) -> Dict:
+    async def analyze_state(self, state: Dict, time_limit: float = 5.0) -> Dict:
         prompt = f"""Analyze the current system state:
 1. Key metrics evaluation
 2. Areas needing improvement
@@ -375,16 +475,23 @@ class AnalysisAgent:
 
 State: {state}
 """
-        response = await self.client.create_chat_completion(
-            model="gpt-4",
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": "You are a system analysis expert."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        return self._parse_analysis(response.choices[0].message['content'])
-        
+        try:
+            response = await asyncio.wait_for(
+                self.client.create_chat_completion(
+                    model="gpt-4",
+                    temperature=0.2,
+                    messages=[
+                        {"role": "system", "content": "You are a system analysis expert."},
+                        {"role": "user", "content": prompt}
+                    ]
+                ),
+                timeout=time_limit
+            )
+            return self._parse_analysis(response.choices[0].message['content'])
+        except asyncio.TimeoutError:
+            logging.warning("State analysis timed out.")
+            return {}
+            
     def _parse_analysis(self, content: str) -> Dict:
         analysis = {}
         sections = re.split(r'\n(?=\d+\.)', content.strip())
@@ -404,14 +511,21 @@ class NoveltySeekingAlgorithm:
         self.rule_generation_agent = None
         self.pattern_detection_agent = None
         self.computer_interaction_system = None
+        self.utility_function = None
         
     async def apply_rules(self, task):
+        start_time = time.time()
+        time_limit = 5.0  # Time limit for reasoning
         if await self.assess_incompleteness(task):
-            print(f"Incompleteness detected for task '{task}'")
+            logging.info(f"Incompleteness detected for task '{task}'")
         
         # Use advanced reasoning to find relevant nodes
         reasoning_paths = self.apply_advanced_reasoning(task)
         for path in reasoning_paths:
+            elapsed_time = time.time() - start_time
+            if elapsed_time >= time_limit:
+                logging.warning("Rule application timed out.")
+                break
             for node_name in path:
                 node_data = self.knowledge_graph.nodes[node_name]['data']
                 # Execute rule and reinforce successful nodes
@@ -447,9 +561,9 @@ class NoveltySeekingAlgorithm:
                 for rule in new_rules:
                     node_name = f"rule_{rule.rule_text}"
                     self.add_node(node_name, rule)
-                print(f"Seeking new knowledge: Generated new rules for '{task}'")
+                logging.info(f"Seeking new knowledge: Generated new rules for '{task}'")
         else:
-            print("PatternDetectionAgent or RuleGenerationAgent not set.")
+            logging.warning("PatternDetectionAgent or RuleGenerationAgent not set.")
     
     def add_node(self, name, rule: Rule):
         node = KnowledgeNode(rule)
@@ -565,7 +679,8 @@ class PersistentStorage:
             'knowledge_graph': nx.node_link_data(state.knowledge_graph),
             'current_task': state.current_task,
             'past_interactions': state.past_interactions,
-            'emotions': state.emotions
+            'emotions': state.emotions,
+            'operational_state': state.operational_state
         }
         with open(f"{self.base_dir}/system_state/state.json", 'w') as f:
             json.dump(state_data, f)
@@ -580,6 +695,7 @@ class PersistentStorage:
             state.current_task = state_data.get('current_task')
             state.past_interactions = state_data.get('past_interactions', [])
             state.emotions = state_data.get('emotions', {})
+            state.operational_state = state_data.get('operational_state', {})
             # Load knowledge graph
             state.knowledge_graph = nx.node_link_graph(state_data['knowledge_graph'])
         return state
@@ -606,6 +722,51 @@ class WebInteractionAgent:
         self.llm_client = anthropic.Client(api_key="your_anthropic_api_key")  # Replace with your API key
         self.action_history = []
         self.known_elements = {}
+
+# --- SelfModifier Class ---
+class SelfModifier:
+    def __init__(self, utility_function):
+        self.utility_function = utility_function
+
+    def should_modify_logic(self, system_state):
+        current_utility = self.utility_function.evaluate(system_state)
+        if current_utility < self.utility_function.desired_threshold:
+            return True
+        return False
+
+    def generate_new_code(self, task_description):
+        try:
+            response = openai.Completion.create(
+                model="gpt-4",
+                prompt=f"Write Python code to {task_description}",
+                max_tokens=500
+            )
+            new_code = response.choices[0].text
+            return new_code
+        except Exception as e:
+            logging.error(f"Code generation failed: {e}")
+            return ""
+
+    def is_valid_code(self, code_str):
+        try:
+            ast.parse(code_str)
+            return True
+        except SyntaxError as e:
+            logging.error(f"Invalid code: {e}")
+            return False
+
+    def modify_logic(self, module_name, object_name, new_code):
+        exec_globals = {}
+        try:
+            exec(new_code, exec_globals)
+            new_object = exec_globals.get(object_name)
+            if new_object:
+                setattr(sys.modules[module_name], object_name, new_object)
+                logging.info(f"Modified {object_name} in {module_name}")
+            else:
+                logging.warning(f"{object_name} not found in the new code.")
+        except Exception as e:
+            logging.error(f"Failed to modify logic: {e}")
 
 # --- EnhancedLearningSystem Class ---
 class EnhancedLearningSystem:
@@ -636,9 +797,14 @@ class EnhancedLearningSystem:
         self.novelty_agent.rule_generation_agent = self.rule_agent
         self.novelty_agent.pattern_detection_agent = self.pattern_agent
         self.novelty_agent.computer_interaction_system = self.web_agent.browser
+        self.novelty_agent.utility_function = UtilityFunction()
         
         # Add the persona
         self.persona = Persona()
+
+        # Initialize utility function
+        self.utility_function = UtilityFunction()
+        self.self_modifier = SelfModifier(self.utility_function)
         
     def save_state(self):
         """Save all persistent data"""
@@ -658,19 +824,21 @@ class EnhancedLearningSystem:
                 'timestamp': time.time(),
                 'task': task
             })
-            
+            self.system_state.metrics['total_tasks'] += 1
+
             # Use the novelty agent to apply rules
             await self.novelty_agent.apply_rules(task)
             
             # Detect patterns in the task
-            patterns = await self.pattern_agent.detect_patterns({'task': task})
+            patterns = await self.pattern_agent.detect_patterns({'task': task}, time_limit=self.system_state.time_limits['reasoning'])
             
             # Generate new rules based on patterns
-            new_rules = await self.rule_agent.generate_rules(patterns)
+            new_rules = await self.rule_agent.generate_rules(patterns, time_limit=self.system_state.time_limits['reasoning'])
             self.system_state.active_rules.extend(new_rules)
+            self.system_state.metrics['new_rules_generated'] += len(new_rules)
             
             # Analyze system state
-            analysis = await self.analysis_agent.analyze_state(self.system_state.get_summary())
+            analysis = await self.analysis_agent.analyze_state(self.system_state.get_summary(), time_limit=self.system_state.time_limits['reasoning'])
             
             # Update system metrics
             self.system_state.update({'metrics': analysis.get('key_metrics', {})})
@@ -682,6 +850,17 @@ class EnhancedLearningSystem:
             base_response = f"I have processed the task '{task}'."
             response = self.persona.generate_response(base_response, self.system_state)
             
+            # Update completed tasks
+            self.system_state.metrics['completed_tasks'] += 1
+            
+            # Update average task time
+            task_time = time.time() - self.system_state.past_interactions[-1]['timestamp']
+            previous_avg_time = self.system_state.metrics.get('average_task_time', 1.0)
+            self.system_state.metrics['average_task_time'] = (previous_avg_time + task_time) / 2
+
+            # Consider self-improvement
+            await self.self_improve()
+            
             return {
                 'status': 'success',
                 'response': response,
@@ -691,7 +870,33 @@ class EnhancedLearningSystem:
         except Exception as e:
             logging.error(f"Task processing failed: {str(e)}")
             return {'status': 'error', 'message': str(e)}
+    
+    async def self_improve(self):
+        if self.self_modifier.should_modify_logic(self.system_state):
+            # Generate new code
+            task_description = "optimize the rule execution process to be faster"
+            new_code = self.self_modifier.generate_new_code(task_description)
+            if self.self_modifier.is_valid_code(new_code):
+                # Verify the modification with a time limit
+                verifier = FormalVerifier(self.utility_function)
+                if verifier.verify_modification(new_code, self.system_state, time_limit=5.0):
+                    # Apply modification with a time limit
+                    await asyncio.wait_for(
+                        self.apply_modification(new_code),
+                        timeout=2.0
+                    )
+                    logging.info("Self-improvement applied successfully.")
+                else:
+                    logging.warning("Modification rejected during verification.")
+            else:
+                logging.error("Generated code is invalid.")
+        else:
+            logging.info("No modification necessary at this time.")
 
+    async def apply_modification(self, code_str):
+        # Apply the code modification
+        self.self_modifier.modify_logic('novelty_agent', 'NoveltySeekingAlgorithm', code_str)
+    
 # --- Streamlit Interface ---
 def create_interface():
     st.title("Alice - Enhanced Learning System Interface")
@@ -738,3 +943,29 @@ if __name__ == "__main__":
     
     # Run interface
     create_interface()
+
+# --- FormalVerifier Class ---
+class FormalVerifier:
+    def __init__(self, utility_function: UtilityFunction):
+        self.utility_function = utility_function
+    
+    def verify_modification(self, modification_code: str, system_state: SystemState, time_limit: float) -> bool:
+        start_time = time.time()
+        simulated_state = self.simulate_modification(modification_code, system_state)
+        expected_utility = self.utility_function.evaluate(simulated_state)
+        current_utility = self.utility_function.evaluate(system_state)
+        if time.time() - start_time > time_limit:
+            logging.warning("Verification timed out.")
+            return False
+        return expected_utility > current_utility
+
+    def simulate_modification(self, code_str: str, system_state: SystemState) -> SystemState:
+        simulated_state = copy.deepcopy(system_state)
+        exec_globals = {}
+        exec_locals = {'system_state': simulated_state}
+        try:
+            exec(code_str, exec_globals, exec_locals)
+            return simulated_state
+        except Exception as e:
+            logging.error(f"Simulation failed: {e}")
+            return system_state

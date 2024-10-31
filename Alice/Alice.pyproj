@@ -22,7 +22,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Alice.py" />
-    <Compile Include="ComputerInteractionSystem.py" />
+    <Compile Include="ComputerInteractionSystem1.py" />
     <Compile Include="Gene.py" />
     <Compile Include="PersonalityGene.py" />
     <Compile Include="QuantumTime.py" />
