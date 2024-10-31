@@ -4,10 +4,6 @@ import streamlit as st
 import pyautogui
 import subprocess
 import os
-from datetime import datetime
-from typing import Dict, Any, List
-import numpy as np
-import pickle
 import faiss
 from selenium import webdriver
 import time
@@ -15,16 +11,24 @@ import logging
 import networkx as nx
 import json
 import asyncio
+import numpy as np
+import re
+from datetime import datetime
+from typing import Dict, Any, List
+
+# Set up OpenAI API key
+openai.api_key = 'your_openai_api_key'  # Replace with your OpenAI API key
 
 # --- Rule Class ---
 class Rule:
-    def __init__(self, rule_text, action=None):
+    def __init__(self, rule_text, condition=None, action=None, confidence=1.0):
         self.rule_text = rule_text
-        self.action = action  # The action to execute
+        self.condition = condition
+        self.action = action
         self.usage_count = 0
         self.strength = 1.0
-        self.embedding = np.random.randn(64)  # Rule embedding
-        self.confidence = 1.0
+        self.embedding = self._get_embedding(rule_text)
+        self.confidence = confidence
         self.creation_time = time.time()
         self.last_used = time.time()
         self.connections = []
@@ -40,6 +44,13 @@ class Rule:
     def decay(self, current_time, decay_rate=0.1):
         time_factor = np.exp(-decay_rate * (current_time - self.last_used))
         self.strength *= time_factor
+        
+    def _get_embedding(self, text: str) -> np.array:
+        response = openai.Embedding.create(
+            model="text-embedding-ada-002",
+            input=text
+        )
+        return np.array(response['data'][0]['embedding'])
         
     def __str__(self):
         return self.rule_text
@@ -160,7 +171,6 @@ class ComputerInteractionSystem:
             logging.error(message)
 
     def execute_action(self, action):
-        # Implement execution logic based on action
         try:
             if action['type'] == 'mouse_move':
                 x, y = action['coordinates']
@@ -214,6 +224,26 @@ class RAGMemory:
         )
         return np.array(response['data'][0]['embedding'])
 
+# --- Persona Class ---
+class Persona:
+    def __init__(self):
+        self.name = "Alice"
+        self.pronouns = ("she", "her")
+        self.personality_traits = ["curious", "helpful", "analytical"]
+        self.communication_style = "formal"
+
+    def introduce_self(self):
+        return f"Hello, I am {self.name}, your enhanced learning assistant."
+
+    def generate_response(self, base_response: str, state):
+        response = f"{self.introduce_self()} {base_response}"
+        if state.current_task:
+            response += f" Currently, I am focused on the task: '{state.current_task}'."
+        last_task = state.get_last_task()
+        if last_task and last_task != state.current_task:
+            response += f" Previously, I worked on '{last_task}'."
+        return response
+
 # --- SystemState Class ---
 class SystemState:
     def __init__(self):
@@ -226,18 +256,32 @@ class SystemState:
         self.active_rules = []
         self.pending_actions = []
         self.knowledge_graph = nx.DiGraph()
-        
+        self.current_task = None
+        self.past_interactions = []
+        self.emotions = {}
+
     def update(self, new_data: Dict):
         self.metrics.update(new_data.get('metrics', {}))
         self.active_rules.extend(new_data.get('new_rules', []))
         self.pending_actions.extend(new_data.get('actions', []))
-        
+        if 'current_task' in new_data:
+            self.current_task = new_data['current_task']
+        if 'emotions' in new_data:
+            self.emotions.update(new_data['emotions'])
+
     def get_summary(self) -> Dict:
         return {
             'metrics': self.metrics,
             'active_rules_count': len(self.active_rules),
-            'pending_actions_count': len(self.pending_actions)
+            'pending_actions_count': len(self.pending_actions),
+            'current_task': self.current_task,
+            'emotions': self.emotions
         }
+
+    def get_last_task(self):
+        if len(self.past_interactions) > 1:
+            return self.past_interactions[-2]['task']
+        return None
 
 # --- PatternDetectionAgent Class ---
 class PatternDetectionAgent:
@@ -246,14 +290,13 @@ class PatternDetectionAgent:
         
     async def detect_patterns(self, data: Dict) -> Dict:
         prompt = f"""Analyze the following data for patterns:
-        1. Recurring elements
-        2. Structural similarities
-        3. Temporal patterns
-        4. Causal relationships
-        
-        Data: {data}
-        """
-        
+1. Recurring elements
+2. Structural similarities
+3. Temporal patterns
+4. Causal relationships
+
+Data: {data}
+"""
         response = await self.client.completions.create(
             model="claude-v1",
             max_tokens=1000,
@@ -263,8 +306,15 @@ class PatternDetectionAgent:
         return self._parse_pattern_response(response.completion)
         
     def _parse_pattern_response(self, content: str) -> Dict:
-        # Implement parsing logic
-        return {'patterns': content}
+        patterns = {}
+        sections = re.split(r'\n(?=\d+\.)', content.strip())
+        for section in sections:
+            match = re.match(r'\d+\.\s*(.*)', section)
+            if match:
+                category = match.group(1).strip().lower().replace(' ', '_')
+                details = section.split('\n', 1)[1] if '\n' in section else ''
+                patterns[category] = details.strip()
+        return patterns
 
 # --- RuleGenerationAgent Class ---
 class RuleGenerationAgent:
@@ -273,14 +323,13 @@ class RuleGenerationAgent:
         
     async def generate_rules(self, data: Dict) -> List[Rule]:
         prompt = f"""Generate formal rules based on these patterns:
-        Data: {data}
-        
-        Format:
-        1. Condition: [when this occurs]
-        2. Action: [system should do this]
-        3. Confidence: [0-1 score]
-        """
-        
+Data: {data}
+
+Format:
+1. Condition: [when this occurs]
+   Action: [system should do this]
+   Confidence: [0-1 score]
+"""
         response = await self.client.completions.create(
             model="claude-v1",
             max_tokens=1000,
@@ -290,16 +339,26 @@ class RuleGenerationAgent:
         return self._parse_rules(response.completion)
         
     def _parse_rules(self, content: str) -> List[Rule]:
-        # Implement parsing logic
-        # For example, parse the content into Rule objects
         rules = []
-        # Example parsing logic (needs to be adapted based on actual response format)
-        lines = content.strip().split('\n')
-        for line in lines:
-            if line.strip():
-                # Parse the line to extract condition, action, and confidence
-                # This is a placeholder and should be replaced with actual parsing code
-                rules.append(Rule(rule_text=line.strip()))
+        rule_texts = re.split(r'\n(?=\d+\.)', content.strip())
+        for rule_text in rule_texts:
+            condition_match = re.search(r'Condition:\s*\[(.+?)\]', rule_text)
+            action_match = re.search(r'Action:\s*\[(.+?)\]', rule_text)
+            confidence_match = re.search(r'Confidence:\s*\[(.+?)\]', rule_text)
+            
+            condition = condition_match.group(1).strip() if condition_match else None
+            action = action_match.group(1).strip() if action_match else None
+            try:
+                confidence = float(confidence_match.group(1).strip()) if confidence_match else 1.0
+            except ValueError:
+                confidence = 1.0
+            
+            if condition and action:
+                rule_full_text = f"When {condition}, then {action}."
+                rule = Rule(rule_text=rule_full_text, condition=condition, action=action, confidence=confidence)
+                rules.append(rule)
+            else:
+                logging.warning(f"Incomplete rule skipped: {rule_text}")
         return rules
 
 # --- AnalysisAgent Class ---
@@ -309,14 +368,13 @@ class AnalysisAgent:
         
     async def analyze_state(self, state: Dict) -> Dict:
         prompt = f"""Analyze the current system state:
-        1. Key metrics evaluation
-        2. Areas needing improvement
-        3. Recommended actions
-        4. Resource requirements
-        
-        State: {state}
-        """
-        
+1. Key metrics evaluation
+2. Areas needing improvement
+3. Recommended actions
+4. Resource requirements
+
+State: {state}
+"""
         response = await self.client.create_chat_completion(
             model="gpt-4",
             temperature=0.2,
@@ -328,17 +386,15 @@ class AnalysisAgent:
         return self._parse_analysis(response.choices[0].message['content'])
         
     def _parse_analysis(self, content: str) -> Dict:
-        # Implement parsing logic
-        return {'analysis': content}
-
-# --- WebInteractionAgent Class ---
-class WebInteractionAgent:
-    def __init__(self, system_state):
-        self.browser = ComputerInteractionSystem()
-        self.system_state = system_state
-        self.llm_client = anthropic.Client(api_key="your_anthropic_key")
-        self.action_history = []
-        self.known_elements = {}
+        analysis = {}
+        sections = re.split(r'\n(?=\d+\.)', content.strip())
+        for section in sections:
+            match = re.match(r'\d+\.\s*(.*)', section)
+            if match:
+                category = match.group(1).strip().lower().replace(' ', '_')
+                details = section.split('\n', 1)[1] if '\n' in section else ''
+                analysis[category] = details.strip()
+        return analysis
 
 # --- NoveltySeekingAlgorithm Class ---
 class NoveltySeekingAlgorithm:
@@ -346,20 +402,24 @@ class NoveltySeekingAlgorithm:
         self.knowledge_graph = knowledge_graph if knowledge_graph else nx.Graph()
         self.meta_rules = ["seek_new_methods", "evaluate_incompleteness"]
         self.rule_generation_agent = None
+        self.pattern_detection_agent = None
         self.computer_interaction_system = None
         
     async def apply_rules(self, task):
         if await self.assess_incompleteness(task):
             print(f"Incompleteness detected for task '{task}'")
         
-        relevant_nodes = self.get_relevant_nodes(task)
-        for node in relevant_nodes:
-            # Execute rule and reinforce successful nodes
-            success = self.execute_rule(node.rule)
-            if success:
-                node.reinforce()
-            else:
-                node.decay()
+        # Use advanced reasoning to find relevant nodes
+        reasoning_paths = self.apply_advanced_reasoning(task)
+        for path in reasoning_paths:
+            for node_name in path:
+                node_data = self.knowledge_graph.nodes[node_name]['data']
+                # Execute rule and reinforce successful nodes
+                success = self.execute_rule(node_data.rule)
+                if success:
+                    node_data.reinforce()
+                else:
+                    node_data.decay()
     
     async def assess_incompleteness(self, task):
         relevant_nodes = self.get_relevant_nodes(task)
@@ -369,57 +429,69 @@ class NoveltySeekingAlgorithm:
         return False
     
     def get_relevant_nodes(self, task):
-        # Return nodes connected to task keywords, simulating entanglement
         relevant_nodes = []
         for node in self.knowledge_graph.nodes:
             node_data = self.knowledge_graph.nodes[node]['data']
             similarity = self.compute_similarity(task, node_data.rule.rule_text)
             if similarity > 0.7:
-                relevant_nodes.append(node_data)
+                relevant_nodes.append(node)
         return relevant_nodes
     
     async def seek_novel_information(self, task):
-        # Call the RuleGenerationAgent to generate new rules
-        if self.rule_generation_agent:
-            new_rules = await self.rule_generation_agent.generate_rules({'task': task})
-            for rule in new_rules:
-                node_name = f"rule_{rule.rule_text}"
-                self.add_node(node_name, rule)
-            print(f"Seeking new knowledge: Generated new rules for '{task}'")
+        # Call the PatternDetectionAgent to detect patterns
+        if self.pattern_detection_agent:
+            patterns = await self.pattern_detection_agent.detect_patterns({'task': task})
+            # Call the RuleGenerationAgent to generate new rules
+            if self.rule_generation_agent:
+                new_rules = await self.rule_generation_agent.generate_rules(patterns)
+                for rule in new_rules:
+                    node_name = f"rule_{rule.rule_text}"
+                    self.add_node(node_name, rule)
+                print(f"Seeking new knowledge: Generated new rules for '{task}'")
         else:
-            print("RuleGenerationAgent not set.")
+            print("PatternDetectionAgent or RuleGenerationAgent not set.")
     
     def add_node(self, name, rule: Rule):
         node = KnowledgeNode(rule)
         self.knowledge_graph.add_node(name, data=node)
     
     def execute_rule(self, rule: Rule):
-        # Implement execution logic
         try:
             if rule.action and self.computer_interaction_system:
                 result = self.computer_interaction_system.execute_action(rule.action)
-                # Check result or implement further logic
                 return result
             else:
-                # No action defined
                 return False
         except Exception as e:
             logging.error(f"Failed to execute rule {rule.rule_text}: {e}")
             return False
 
     def compute_similarity(self, text1, text2):
-        # Implement or call embedding-based similarity
         embedding1 = self.get_embedding(text1)
         embedding2 = self.get_embedding(text2)
-        similarity = np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
+        epsilon = 1e-8
+        denominator = (np.linalg.norm(embedding1) * np.linalg.norm(embedding2)) + epsilon
+        similarity = np.dot(embedding1, embedding2) / denominator
         return similarity
 
     def get_embedding(self, text: str) -> np.array:
-        response = openai.Embedding.create(
-            model="text-embedding-ada-002",
-            input=text
-        )
-        return np.array(response['data'][0]['embedding'])
+        try:
+            response = openai.Embedding.create(
+                model="text-embedding-ada-002",
+                input=text
+            )
+            return np.array(response['data'][0]['embedding'])
+        except Exception as e:
+            logging.error(f"Embedding API call failed: {e}")
+            return np.zeros(1536)
+
+    def apply_advanced_reasoning(self, task):
+        relevant_nodes = self.get_relevant_nodes(task)
+        reasoning_paths = []
+        for node in relevant_nodes:
+            paths = nx.single_source_shortest_path(self.knowledge_graph, node, cutoff=2)
+            reasoning_paths.extend(paths.values())
+        return reasoning_paths
 
 # --- PersistentStorage Class ---
 class PersistentStorage:
@@ -450,6 +522,7 @@ class PersistentStorage:
     def save_rules(self, rules: List[Rule]):
         rules_data = [{
             'rule_text': rule.rule_text,
+            'condition': rule.condition,
             'action': rule.action,
             'usage_count': rule.usage_count,
             'strength': rule.strength,
@@ -468,11 +541,15 @@ class PersistentStorage:
                 rules_data = json.load(f)
             rules = []
             for data in rules_data:
-                rule = Rule(data['rule_text'], action=data['action'])
+                rule = Rule(
+                    rule_text=data['rule_text'],
+                    condition=data['condition'],
+                    action=data['action'],
+                    confidence=data['confidence']
+                )
                 rule.usage_count = data['usage_count']
                 rule.strength = data['strength']
                 rule.embedding = np.array(data['embedding'])
-                rule.confidence = data['confidence']
                 rule.creation_time = data['creation_time']
                 rule.last_used = data['last_used']
                 rule.connections = data['connections']
@@ -483,8 +560,12 @@ class PersistentStorage:
     def save_system_state(self, state: SystemState):
         state_data = {
             'metrics': state.metrics,
+            'active_rules': [rule.rule_text for rule in state.active_rules],
             'pending_actions': state.pending_actions,
-            'knowledge_graph': nx.node_link_data(state.knowledge_graph)
+            'knowledge_graph': nx.node_link_data(state.knowledge_graph),
+            'current_task': state.current_task,
+            'past_interactions': state.past_interactions,
+            'emotions': state.emotions
         }
         with open(f"{self.base_dir}/system_state/state.json", 'w') as f:
             json.dump(state_data, f)
@@ -496,6 +577,10 @@ class PersistentStorage:
                 state_data = json.load(f)
             state.metrics = state_data['metrics']
             state.pending_actions = state_data['pending_actions']
+            state.current_task = state_data.get('current_task')
+            state.past_interactions = state_data.get('past_interactions', [])
+            state.emotions = state_data.get('emotions', {})
+            # Load knowledge graph
             state.knowledge_graph = nx.node_link_graph(state_data['knowledge_graph'])
         return state
 
@@ -503,7 +588,7 @@ class PersistentStorage:
         data = nx.node_link_data(knowledge_graph)
         with open(f"{self.base_dir}/knowledge_graph/graph.json", 'w') as f:
             json.dump(data, f)
-    
+
     def load_knowledge_graph(self):
         path = f"{self.base_dir}/knowledge_graph/graph.json"
         if os.path.exists(path):
@@ -513,6 +598,15 @@ class PersistentStorage:
         else:
             return nx.Graph()
 
+# --- WebInteractionAgent Class ---
+class WebInteractionAgent:
+    def __init__(self, system_state):
+        self.browser = ComputerInteractionSystem()
+        self.system_state = system_state
+        self.llm_client = anthropic.Client(api_key="your_anthropic_api_key")  # Replace with your API key
+        self.action_history = []
+        self.known_elements = {}
+
 # --- EnhancedLearningSystem Class ---
 class EnhancedLearningSystem:
     def __init__(self):
@@ -520,7 +614,7 @@ class EnhancedLearningSystem:
         self.storage = PersistentStorage()
         
         # Initialize API clients
-        self.claude_client = anthropic.Client(api_key="your_anthropic_key")
+        self.claude_client = anthropic.Client(api_key="your_anthropic_api_key")  # Replace with your API key
         self.openai_client = openai
         
         # Load persistent components
@@ -540,13 +634,11 @@ class EnhancedLearningSystem:
         self.knowledge_graph = self.storage.load_knowledge_graph()
         self.novelty_agent = NoveltySeekingAlgorithm(self.knowledge_graph)
         self.novelty_agent.rule_generation_agent = self.rule_agent
+        self.novelty_agent.pattern_detection_agent = self.pattern_agent
         self.novelty_agent.computer_interaction_system = self.web_agent.browser
         
-        # Load metrics
-        self.complexity = self.system_state.metrics.get('complexity', 0)
-        self.novelty = self.system_state.metrics.get('novelty', 0)
-        self.incompleteness_flag = False
-        self.modification_layers = 0
+        # Add the persona
+        self.persona = Persona()
         
     def save_state(self):
         """Save all persistent data"""
@@ -557,14 +649,42 @@ class EnhancedLearningSystem:
         
     async def process_task(self, task: str) -> Dict:
         try:
+            # Add task to memory
+            self.memory.add_memory({'content': task})
+            
+            # Update current task in system state
+            self.system_state.current_task = task
+            self.system_state.past_interactions.append({
+                'timestamp': time.time(),
+                'task': task
+            })
+            
             # Use the novelty agent to apply rules
             await self.novelty_agent.apply_rules(task)
+            
+            # Detect patterns in the task
+            patterns = await self.pattern_agent.detect_patterns({'task': task})
+            
+            # Generate new rules based on patterns
+            new_rules = await self.rule_agent.generate_rules(patterns)
+            self.system_state.active_rules.extend(new_rules)
+            
+            # Analyze system state
+            analysis = await self.analysis_agent.analyze_state(self.system_state.get_summary())
+            
+            # Update system metrics
+            self.system_state.update({'metrics': analysis.get('key_metrics', {})})
             
             # Save state after processing
             self.save_state()
             
+            # Base response from Alice's processing
+            base_response = f"I have processed the task '{task}'."
+            response = self.persona.generate_response(base_response, self.system_state)
+            
             return {
                 'status': 'success',
+                'response': response,
                 'system_state': self.system_state.get_summary()
             }
                     
@@ -574,7 +694,7 @@ class EnhancedLearningSystem:
 
 # --- Streamlit Interface ---
 def create_interface():
-    st.title("Enhanced Learning System Interface")
+    st.title("Alice - Enhanced Learning System Interface")
     
     # Initialize system
     if 'system' not in st.session_state:
@@ -592,14 +712,16 @@ def create_interface():
                 results = loop.run_until_complete(st.session_state.system.process_task(task))
                 loop.close()
                 
-                # Display results
-                st.header("Results")
+                # Display Alice's response
+                st.header("Alice's Response")
+                st.write(results.get('response', 'No response'))
                 
+                # Display system state
                 st.subheader("System State")
                 st.json(results.get('system_state', {}))
         else:
             st.warning("Please enter a task description.")
-
+    
     # System metrics
     st.header("System Metrics")
     metrics = st.session_state.system.system_state.get_summary()
@@ -616,4 +738,3 @@ if __name__ == "__main__":
     
     # Run interface
     create_interface()
-
