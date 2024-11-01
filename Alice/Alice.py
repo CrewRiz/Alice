@@ -20,6 +20,8 @@ import ast
 import threading
 import copy
 import sys
+from TimePerception import QuantumTime, QuantumTaskScheduler
+
 
 # Set up OpenAI API key
 openai.api_key = 'your_openai_api_key'  # Replace with your OpenAI API key
@@ -773,6 +775,8 @@ class EnhancedLearningSystem:
     def __init__(self):
         # Initialize storage
         self.storage = PersistentStorage()
+        self.quantum_time = QuantumTime(self.system_state)
+        self.task_scheduler = QuantumTaskScheduler(self.quantum_time)
         
         # Initialize API clients
         self.claude_client = anthropic.Client(api_key="your_anthropic_api_key")  # Replace with your API key
